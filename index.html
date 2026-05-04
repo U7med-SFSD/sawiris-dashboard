@@ -130,7 +130,16 @@ aside{overflow:auto;scrollbar-width:thin}
   color:rgba(35,102,61,.55);
   z-index:2;
 }
-
+.topbar:after{
+  content:"";
+  width:46px;
+  height:4px;
+  border-radius:999px;
+  background:linear-gradient(90deg,var(--main),var(--soft));
+  position:absolute;
+  bottom:0;
+  right:26px;
+}
 .topbar{position:relative}
 .card{position:relative;overflow:hidden}
 .card:before{
@@ -1015,6 +1024,19 @@ aside{
   padding-right:18px;
 }
 
+.topbar h1::after{
+  content:"";
+  position:absolute;
+  right:0;
+  top:50%;
+  transform:translateY(-50%);
+  width:6px;
+  height:60%;
+  border-radius:4px;
+  background:#23663D;
+  transition:.3s ease;
+}
+
 /* Sector colors */
 
 
@@ -1521,6 +1543,107 @@ const programs=[
 ['بناء القدرات','brown',2289,3000,76.30,0,0,736,1875,'الهدف الثاني','']
 ];
 const colorMap={red:'#D64545',green:'#28A745',blue:'#2E86C1',lightblue:'#5DADE2',brown:'#8B5E3C',orange:'#E67E22'};
+
+function normalizeProgramName(name){
+  return String(name || '')
+    .replace('الصغيرة','')
+    .replace('الوالدية','')
+    .replace('ما قبل','قبل')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
+function getStrategicDataByLabel(label){
+  const normalized = normalizeProgramName(label);
+  let matched = programs.find(p => normalizeProgramName(p[0]) === normalized);
+
+  if(!matched){
+    const sectorPrograms = programs.filter(p => p[10] === label);
+    if(sectorPrograms.length){
+      const actual = sectorPrograms.reduce((sum,p)=>sum+p[2],0);
+      const plan = sectorPrograms.reduce((sum,p)=>sum+p[3],0);
+      const pct = plan ? (actual / plan * 100) : 0;
+      return {actual, plan, pct, color: colorMap[sectorPrograms[0][1]]};
+    }
+  }
+
+  if(!matched){
+    const goalPrograms = programs.filter(p => p[9] === label);
+    if(goalPrograms.length){
+      const actual = goalPrograms.reduce((sum,p)=>sum+p[2],0);
+      const plan = goalPrograms.reduce((sum,p)=>sum+p[3],0);
+      const pct = plan ? (actual / plan * 100) : 0;
+      return {actual, plan, pct, color: colorMap[goalPrograms[0][1]]};
+    }
+  }
+
+  if(!matched){
+    return {actual:'—', plan:'—', pct:0, color:'var(--main)'};
+  }
+
+  return {actual:matched[2], plan:matched[3], pct:matched[4], color:colorMap[matched[1]]};
+}
+
+function buildProgramProgressRow(label, value, pct, color){
+  const safePct = Math.max(0, Math.min(Number(pct) || 0, 100));
+  const displayValue = typeof value === 'number' ? fmt(value) : value;
+  return `
+    <div class="program-progress-row">
+      <div class="program-progress-head">
+        <b>${label}</b>
+        <span>${displayValue}</span>
+      </div>
+      <div class="program-progress-track">
+        <div class="program-progress-fill" style="width:${safePct}%;background:${color}"></div>
+      </div>
+      <div class="program-progress-percent">${safePct.toFixed(1)}%</div>
+    </div>
+  `;
+}
+
+function enhanceProgramDistributionCards(){
+  document.querySelectorAll('.program-distribution-card').forEach(card => {
+    if(card.dataset.enhanced === 'true' || card.closest('.program-distribution-split')) return;
+
+    const rows = Array.from(card.querySelectorAll('.bar-row'));
+    if(!rows.length) return;
+
+    const annualRows = rows.map(row => {
+      const label = row.querySelector('b')?.textContent?.trim() || '';
+      const num = row.querySelector('.num')?.textContent?.trim() || '—';
+      const fill = row.querySelector('.fill');
+      const widthText = fill?.style?.width || '0%';
+      const pct = parseFloat(widthText) || 0;
+      const bg = fill?.style?.background || fill?.style?.backgroundColor || 'var(--main)';
+      return {label, num, pct, bg};
+    });
+
+    const annualHtml = annualRows.map(r => buildProgramProgressRow(r.label, r.num, r.pct, r.bg)).join('');
+
+    const strategicHtml = annualRows.map(r => {
+      const s = getStrategicDataByLabel(r.label);
+      return buildProgramProgressRow(r.label, s.actual, s.pct, s.color);
+    }).join('');
+
+    const split = document.createElement('div');
+    split.className = 'program-distribution-split';
+    split.innerHTML = `
+      <div class="card program-metric-card annual-program-card">
+        <div class="section-title">التوزيع حسب البرامج <span class="tag">محقق السنة</span></div>
+        <div class="program-progress-list">${annualHtml}</div>
+      </div>
+      <div class="card program-metric-card strategic-program-card">
+        <div class="section-title">التوزيع حسب البرامج <span class="tag">المحقق الاستراتيجي</span></div>
+        <div class="program-progress-list">${strategicHtml}</div>
+      </div>
+    `;
+
+    card.replaceWith(split);
+  });
+}
+
+enhanceProgramDistributionCards();
+
 function fmt(n){return Number(n).toLocaleString('en-US')}
 const programRowsEl=document.getElementById('programRows');
 if(programRowsEl){programRowsEl.innerHTML=programs.slice().sort((a,b)=>b[4]-a[4]).map(p=>`<tr><td><b>${p[0]}</b></td><td>${fmt(p[2])}</td><td>${fmt(p[3])}</td><td><div class="progress"><span style="width:${Math.min(p[4],100)}%;background:${colorMap[p[1]]}"></span></div><b>${p[4].toFixed(1)}%</b></td></tr>`).join('');}
@@ -2520,6 +2643,96 @@ body.sector-economic .topbar h1{color:var(--red)!important;}
 body.sector-social .topbar h1{color:var(--green)!important;}
 body.sector-education .topbar h1{color:var(--blue)!important;}
 
+
+
+/* ===== UX CLEANUP + PROGRAM COMPARISON CHART ===== */
+/* Remove decorative title side line and small underline */
+.topbar:after,
+.topbar h1::after{
+  display:none!important;
+}
+.topbar h1{
+  padding-right:0!important;
+}
+
+/* Separate clear cards for annual vs strategic program progress */
+.program-distribution-split{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:20px;
+  grid-column:1 / -1;
+  align-items:stretch;
+}
+.program-metric-card{
+  min-height:320px!important;
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+.program-progress-list{
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+.program-progress-row{
+  background:#fafafa;
+  border:1px solid #e2dedb;
+  border-radius:16px;
+  padding:13px 14px 12px;
+}
+.program-progress-head{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:12px;
+  align-items:center;
+  margin-bottom:9px;
+}
+.program-progress-head b{
+  font-size:14px;
+  line-height:1.45;
+  color:var(--text);
+}
+.program-progress-head span{
+  font-size:15px;
+  font-weight:900;
+  color:var(--main);
+  background:#fff;
+  border:1px solid #e2dedb;
+  border-radius:999px;
+  padding:5px 10px;
+  min-width:66px;
+  text-align:center;
+}
+.program-progress-track{
+  height:18px;
+  background:#eee7e4;
+  border-radius:999px;
+  overflow:hidden;
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.06);
+}
+.program-progress-fill{
+  height:100%;
+  border-radius:999px;
+  min-width:4px;
+  animation:progressGrow .65s ease both;
+  transform-origin:right center;
+}
+.program-progress-percent{
+  margin-top:6px;
+  font-size:12px;
+  color:var(--muted);
+  font-weight:800;
+  text-align:left;
+}
+.strategic-program-card{
+  border-color:rgba(35,102,61,.18)!important;
+}
+.strategic-program-card .program-progress-head span{
+  color:var(--main);
+}
+@media(max-width:1100px){
+  .program-distribution-split{grid-template-columns:1fr;}
+}
 </style>
 
 <div class="brand-watermark">Sawiris Foundation for Social Development</div>
