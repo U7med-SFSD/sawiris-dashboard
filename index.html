@@ -3771,65 +3771,478 @@ function reportFileName(type,value,period,ext){
   return `Sawiris_Report_${type}_${String(value||'all').replace(/[\\/:*?"<>|\s]+/g,'_')}_${periodLabel(period)}.${ext}`;
 }
 
+/* ══════════════════════════════════════════════════
+   PROFESSIONAL EXPORT ENGINE
+   ══════════════════════════════════════════════════ */
+
+const BRAND = {
+  green      : '23663D',
+  greenLight : 'A3CA78',
+  bg         : 'F0EDEC',
+  white      : 'FFFFFF',
+  text       : '1f2a22',
+  muted      : '6b756d',
+  red        : 'D64545',
+  blue       : '2E86C1',
+  orange     : 'E67E22',
+  border     : 'E2DEDB',
+};
+
+function periodDisplayLabel(period){
+  return {monthly:'شهري', quarterly:'ربع سنوي', annual:'سنوي'}[period] || period;
+}
+
+function scopeDisplayLabel(type, value){
+  if(type==='all') return 'تقرير المؤسسة بالكامل';
+  if(type==='sector') return 'قطاع: ' + value;
+  return 'برنامج: ' + value;
+}
+
 function summarizeRowsByPeriod(rows, period){
-  return rows.map(r=>{
-    const base={
-      'البرنامج': rowProgram(r)||r.program||'',
-      'القطاع': rowSector(r)||r.sector||'',
-      'الهدف': rowGoal(r)||''
+  return rows.map(r => {
+    const base = {
+      'البرنامج'  : rowProgram(r) || r.program || '',
+      'القطاع'    : rowSector(r)  || r.sector  || '',
+      'الهدف'     : rowGoal(r)   || '',
     };
-    if(period==='monthly'||period==='quarterly'){
-      return {...base,
-        'المحقق (الربع)': rowQuarterActual(r)||r.quarterActual||0,
-        'المخطط (الربع)': rowQuarterPlan(r)||r.quarterPlan||0,
-        'نسبة الإنجاز (الربع)': `${pct(rowQuarterActual(r)||r.quarterActual||0, rowQuarterPlan(r)||r.quarterPlan||0).toFixed(2)}%`
+    if(period === 'monthly' || period === 'quarterly'){
+      const qa = rowQuarterActual(r) || r.quarterActual || 0;
+      const qp = rowQuarterPlan(r)   || r.quarterPlan   || 0;
+      return { ...base,
+        'المحقق (الربع)' : qa,
+        'المخطط (الربع)' : qp,
+        'نسبة الإنجاز'   : pct(qa, qp).toFixed(1) + '%',
       };
     }
-    return {...base,
-      'محقق السنة': rowYearActual(r)||r.yearActual||0,
-      'مخطط السنة': rowYearPlan(r)||r.yearPlan||0,
-      'نسبة السنة': `${pct(rowYearActual(r)||r.yearActual||0, rowYearPlan(r)||r.yearPlan||0).toFixed(2)}%`,
-      'محقق الاستراتيجية': rowStrActual(r)||r.strategyActual||0,
-      'مخطط الاستراتيجية': rowStrPlan(r)||r.strategyPlan||0,
-      'نسبة الاستراتيجية': `${pct(rowStrActual(r)||r.strategyActual||0, rowStrPlan(r)||r.strategyPlan||0).toFixed(2)}%`
+    const ya = rowYearActual(r) || r.yearActual || 0;
+    const yp = rowYearPlan(r)   || r.yearPlan   || 0;
+    const sa = rowStrActual(r)  || r.strategyActual || 0;
+    const sp = rowStrPlan(r)    || r.strategyPlan   || 0;
+    return { ...base,
+      'محقق السنة'          : ya,
+      'مخطط السنة'          : yp,
+      'نسبة السنة'          : pct(ya, yp).toFixed(1) + '%',
+      'محقق الاستراتيجية'   : sa,
+      'مخطط الاستراتيجية'   : sp,
+      'نسبة الاستراتيجية'   : pct(sa, sp).toFixed(1) + '%',
     };
   });
 }
 
+/* ─── EXCEL PROFESSIONAL EXPORT ─────────────────── */
 function exportSelectedReportExcel(){
-  const s=selectedScope();
-  const rows=getReportRows(s.type,s.value);
-  if(!rows.length){alert('لا توجد بيانات للتصدير');return;}
-  const data=summarizeRowsByPeriod(rows,s.period);
-  const wb=XLSX.utils.book_new();
-  const ws=XLSX.utils.json_to_sheet(data);
-  XLSX.utils.book_append_sheet(wb,ws,'Report');
-  XLSX.writeFile(wb, reportFileName(s.type,s.value,s.period,'xlsx'));
+  const s = selectedScope();
+  const rows = getReportRows(s.type, s.value);
+  if(!rows.length){ alert('لا توجد بيانات للتصدير'); return; }
+
+  const data    = summarizeRowsByPeriod(rows, s.period);
+  const headers = Object.keys(data[0] || {});
+  const today   = new Date().toLocaleDateString('ar-EG');
+
+  const wb = XLSX.utils.book_new();
+
+  /* ── Sheet 1: Cover ── */
+  const coverData = [
+    ['مؤسسة ساويرس للتنمية الاجتماعية'],
+    ['Sawiris Foundation for Social Development'],
+    [''],
+    [scopeDisplayLabel(s.type, s.value)],
+    ['الفترة: ' + periodDisplayLabel(s.period)],
+    ['تاريخ التقرير: ' + today],
+    ['عدد السجلات: ' + rows.length],
+    [''],
+    ['ملاحظة: هذا التقرير سري ومخصص للاستخدام الداخلي فقط'],
+  ];
+  const wsCover = XLSX.utils.aoa_to_sheet(coverData);
+  wsCover['!cols'] = [{ wch: 55 }];
+
+  /* Cover styling */
+  const coverStyles = {
+    'A1': { font:{ bold:true, sz:20, color:{rgb:BRAND.white} }, fill:{ fgColor:{rgb:BRAND.green} }, alignment:{ horizontal:'center', vertical:'center' } },
+    'A2': { font:{ sz:13, color:{rgb:BRAND.white} },            fill:{ fgColor:{rgb:BRAND.green} }, alignment:{ horizontal:'center' } },
+    'A4': { font:{ bold:true, sz:16, color:{rgb:BRAND.green} }, alignment:{ horizontal:'center' } },
+    'A5': { font:{ bold:true, sz:13, color:{rgb:BRAND.muted} }, alignment:{ horizontal:'center' } },
+    'A6': { font:{ sz:12, color:{rgb:BRAND.muted} },            alignment:{ horizontal:'center' } },
+    'A7': { font:{ bold:true, sz:13, color:{rgb:BRAND.green} }, alignment:{ horizontal:'center' } },
+    'A9': { font:{ italic:true, sz:10, color:{rgb:BRAND.muted} }, alignment:{ horizontal:'center' } },
+  };
+  Object.entries(coverStyles).forEach(([cell, style]) => {
+    if(!wsCover[cell]) wsCover[cell] = { v:'' };
+    wsCover[cell].s = style;
+  });
+  wsCover['!rows'] = [{ hpt:36 },{ hpt:24 },{},{ hpt:34 },{ hpt:24 },{ hpt:22 },{ hpt:24 },{},{ hpt:20 }];
+  XLSX.utils.book_append_sheet(wb, wsCover, 'الغلاف');
+
+  /* ── Sheet 2: Data ── */
+  const wsData = XLSX.utils.aoa_to_sheet([
+    /* Title row */
+    [scopeDisplayLabel(s.type, s.value) + ' — ' + periodDisplayLabel(s.period)],
+    /* Empty separator */
+    [],
+    /* Headers */
+    headers,
+    /* Data rows */
+    ...data.map(r => headers.map(h => r[h]))
+  ]);
+
+  /* Column widths */
+  wsData['!cols'] = headers.map(h =>
+    h === 'البرنامج' ? { wch:34 } :
+    h === 'القطاع'   ? { wch:22 } :
+    h === 'الهدف'    ? { wch:22 } :
+    h.includes('نسبة') ? { wch:14 } : { wch:18 }
+  );
+
+  /* Title row merge */
+  wsData['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:headers.length-1} }];
+
+  /* Title style */
+  const titleCell = wsData['A1'] || { v:'' };
+  titleCell.s = {
+    font: { bold:true, sz:14, color:{ rgb:BRAND.white } },
+    fill: { fgColor:{ rgb:BRAND.green } },
+    alignment: { horizontal:'center', vertical:'center' },
+  };
+  wsData['A1'] = titleCell;
+
+  /* Header row style (row index 2 = 3rd row) */
+  headers.forEach((h, ci) => {
+    const addr = XLSX.utils.encode_cell({ r:2, c:ci });
+    if(!wsData[addr]) wsData[addr] = { v:h };
+    wsData[addr].s = {
+      font: { bold:true, sz:11, color:{ rgb:BRAND.white } },
+      fill: { fgColor:{ rgb:'17472B' } },
+      alignment: { horizontal:'center', vertical:'center', wrapText:true },
+      border: {
+        bottom:{ style:'thin', color:{ rgb:BRAND.greenLight } },
+        right :{ style:'thin', color:{ rgb:BRAND.greenLight } },
+      },
+    };
+  });
+
+  /* Data rows styling */
+  data.forEach((row, ri) => {
+    const isEven = ri % 2 === 0;
+    headers.forEach((h, ci) => {
+      const addr = XLSX.utils.encode_cell({ r:3+ri, c:ci });
+      if(!wsData[addr]) wsData[addr] = { v:'' };
+      const isPercent = h.includes('نسبة');
+      const val       = row[h];
+      const numVal    = typeof val === 'string' && val.endsWith('%') ? parseFloat(val) : null;
+      /* Colour code percentage cells */
+      let fillColor = isEven ? 'F7F5F3' : BRAND.white;
+      if(isPercent && numVal !== null){
+        fillColor = numVal >= 90 ? 'D4EDDA' : numVal >= 60 ? 'FFF3CD' : 'FDECEA';
+      }
+      wsData[addr].s = {
+        fill: { fgColor:{ rgb:fillColor } },
+        font: { sz:10, color:{ rgb: isPercent ? (numVal>=90?'155724':numVal>=60?'856404':'721C24') : BRAND.text } ,
+                bold: isPercent },
+        alignment: { horizontal: isPercent||typeof val==='number'?'center':'right', vertical:'center', wrapText:true },
+        border: {
+          bottom:{ style:'hair', color:{ rgb:BRAND.border } },
+          right :{ style:'hair', color:{ rgb:BRAND.border } },
+        },
+      };
+    });
+  });
+
+  /* Row heights */
+  wsData['!rows'] = [{ hpt:32 }, { hpt:6 }, { hpt:28 }, ...data.map(()=>({ hpt:22 }))];
+
+  XLSX.utils.book_append_sheet(wb, wsData, 'بيانات التقرير');
+
+  /* ── Sheet 3: Summary ── */
+  const totals = data.reduce((a, r) => {
+    const addNum = key => toNumber(r[key]||0);
+    if(s.period === 'monthly' || s.period === 'quarterly'){
+      a.qa += addNum('المحقق (الربع)'); a.qp += addNum('المخطط (الربع)');
+    } else {
+      a.ya += addNum('محقق السنة');   a.yp += addNum('مخطط السنة');
+      a.sa += addNum('محقق الاستراتيجية'); a.sp += addNum('مخطط الاستراتيجية');
+    }
+    return a;
+  }, {qa:0,qp:0,ya:0,yp:0,sa:0,sp:0});
+
+  const summaryRows = [
+    ['ملخص التقرير'],
+    [],
+    ['البيان', 'القيمة'],
+    ['نطاق التقرير', scopeDisplayLabel(s.type, s.value)],
+    ['الفترة الزمنية', periodDisplayLabel(s.period)],
+    ['تاريخ الإنشاء', today],
+    ['إجمالي السجلات', rows.length],
+    [],
+  ];
+  if(s.period === 'monthly' || s.period === 'quarterly'){
+    summaryRows.push(
+      ['إجمالي المحقق (الربع)', totals.qa],
+      ['إجمالي المخطط (الربع)', totals.qp],
+      ['نسبة الإنجاز الإجمالية', pct(totals.qa,totals.qp).toFixed(1)+'%']
+    );
+  } else {
+    summaryRows.push(
+      ['إجمالي محقق السنة', totals.ya],
+      ['إجمالي مخطط السنة', totals.yp],
+      ['نسبة إنجاز السنة', pct(totals.ya,totals.yp).toFixed(1)+'%'],
+      [],
+      ['إجمالي محقق الاستراتيجية', totals.sa],
+      ['إجمالي مخطط الاستراتيجية', totals.sp],
+      ['نسبة إنجاز الاستراتيجية', pct(totals.sa,totals.sp).toFixed(1)+'%']
+    );
+  }
+
+  const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+  wsSummary['!cols'] = [{ wch:32 }, { wch:22 }];
+  wsSummary['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:1} }];
+
+  /* Title */
+  if(!wsSummary['A1']) wsSummary['A1']={ v:'' };
+  wsSummary['A1'].s = {
+    font:{ bold:true, sz:14, color:{ rgb:BRAND.white } },
+    fill:{ fgColor:{ rgb:BRAND.green } },
+    alignment:{ horizontal:'center', vertical:'center' },
+  };
+  /* Header */
+  ['A3','B3'].forEach((addr,ci)=>{
+    if(!wsSummary[addr]) wsSummary[addr]={ v:ci===0?'البيان':'القيمة' };
+    wsSummary[addr].s={
+      font:{ bold:true, sz:11, color:{ rgb:BRAND.white } },
+      fill:{ fgColor:{ rgb:'17472B' } },
+      alignment:{ horizontal:'center' },
+    };
+  });
+  XLSX.utils.book_append_sheet(wb, wsSummary, 'الملخص');
+
+  XLSX.writeFile(wb, reportFileName(s.type, s.value, s.period, 'xlsx'));
 }
 
 function exportRowsExcel(rows, filename){
-  const data=summarizeRows(rows); const wb=XLSX.utils.book_new(); const ws=XLSX.utils.json_to_sheet(data); XLSX.utils.book_append_sheet(wb,ws,'Report'); XLSX.writeFile(wb,filename);
+  const data = summarizeRows(rows);
+  const wb   = XLSX.utils.book_new();
+  const ws   = XLSX.utils.json_to_sheet(data);
+  XLSX.utils.book_append_sheet(wb, ws, 'Report');
+  XLSX.writeFile(wb, filename);
 }
 
+/* ─── PDF PROFESSIONAL EXPORT ───────────────────── */
 function exportSelectedReportPDF(){
-  const s=selectedScope();
-  const rows=getReportRows(s.type,s.value);
-  if(!rows.length){alert('لا توجد بيانات للتصدير');return;}
-  if(!window.jspdf?.jsPDF){alert('مكتبة PDF لم يتم تحميلها بعد');return;}
-  const periodLabels={'monthly':'شهري','quarterly':'ربع سنوي','annual':'سنوي'};
-  const doc=new window.jspdf.jsPDF({orientation:'landscape'});
-  doc.text(`Sawiris Foundation - ${s.type==='all'?'تقرير شامل':s.type==='sector'?'قطاع: '+s.value:'برنامج: '+s.value} | الفترة: ${periodLabels[s.period]||''}`, 14, 14);
-  const data=summarizeRowsByPeriod(rows,s.period);
-  doc.autoTable({head:[Object.keys(data[0]||{'No Data':''})],body:data.map(Object.values),startY:22,styles:{fontSize:8}});
-  doc.save(reportFileName(s.type,s.value,s.period,'pdf'));
+  const s = selectedScope();
+  const rows = getReportRows(s.type, s.value);
+  if(!rows.length){ alert('لا توجد بيانات للتصدير'); return; }
+  if(!window.jspdf?.jsPDF){ alert('مكتبة PDF لم يتم تحميلها بعد'); return; }
+
+  const data    = summarizeRowsByPeriod(rows, s.period);
+  const headers = Object.keys(data[0] || {});
+  const today   = new Date().toLocaleDateString('ar-EG');
+  const scopeLabel  = scopeDisplayLabel(s.type, s.value);
+  const periodLabel = periodDisplayLabel(s.period);
+
+  const doc = new window.jspdf.jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+
+  /* ── Helper: draw page background ── */
+  function drawPageBackground(){
+    doc.setFillColor(240, 237, 236);
+    doc.rect(0, 0, W, H, 'F');
+    /* Top green header bar */
+    doc.setFillColor(35, 102, 61);
+    doc.rect(0, 0, W, 22, 'F');
+    /* Bottom accent line */
+    doc.setFillColor(163, 202, 120);
+    doc.rect(0, H-4, W, 4, 'F');
+  }
+
+  /* ── Page 1: Cover ── */
+  drawPageBackground();
+
+  /* White card */
+  const cx=W/2, cy=H/2;
+  doc.setFillColor(255,255,255);
+  doc.roundedRect(cx-95, cy-52, 190, 104, 8, 8, 'F');
+  doc.setDrawColor(226,222,219);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(cx-95, cy-52, 190, 104, 8, 8, 'S');
+
+  /* Green accent top of card */
+  doc.setFillColor(35,102,61);
+  doc.roundedRect(cx-95, cy-52, 190, 10, 8, 8, 'F');
+  doc.setFillColor(35,102,61);
+  doc.rect(cx-95, cy-49, 190, 7, 'F');
+
+  /* Org name */
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(9);
+  doc.setTextColor(255,255,255);
+  doc.text('SAWIRIS FOUNDATION FOR SOCIAL DEVELOPMENT', cx, cy-46, { align:'center' });
+
+  /* Report title */
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(18);
+  doc.setTextColor(35,102,61);
+  doc.text('Performance Report', cx, cy-26, { align:'center' });
+
+  /* Divider */
+  doc.setDrawColor(163,202,120);
+  doc.setLineWidth(1.2);
+  doc.line(cx-40, cy-20, cx+40, cy-20);
+
+  /* Scope */
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(11);
+  doc.setTextColor(31,42,34);
+  doc.text(scopeLabel, cx, cy-12, { align:'center' });
+
+  /* Period badge */
+  doc.setFillColor(240,237,236);
+  doc.roundedRect(cx-28, cy-6, 56, 10, 4, 4, 'F');
+  doc.setFontSize(9);
+  doc.setTextColor(35,102,61);
+  doc.setFont('helvetica','bold');
+  doc.text('Period: ' + periodLabel, cx, cy+0.5, { align:'center' });
+
+  /* Footer info */
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(8);
+  doc.setTextColor(107,117,109);
+  doc.text('Date: ' + today + '   |   Records: ' + rows.length, cx, cy+18, { align:'center' });
+
+  /* Confidential watermark */
+  doc.setFont('helvetica','italic');
+  doc.setFontSize(7);
+  doc.setTextColor(163,202,120);
+  doc.text('CONFIDENTIAL — INTERNAL USE ONLY', cx, cy+28, { align:'center' });
+
+  /* ── Page 2+: Data Table ── */
+  doc.addPage();
+  drawPageBackground();
+
+  /* Page header */
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(11);
+  doc.setTextColor(255,255,255);
+  doc.text('Sawiris Foundation — ' + scopeLabel, 14, 14);
+
+  /* Compute totals for summary bar */
+  const totals = data.reduce((a,r)=>{
+    if(s.period==='monthly'||s.period==='quarterly'){
+      a.qa += toNumber(r['المحقق (الربع)']||0);
+      a.qp += toNumber(r['المخطط (الربع)']||0);
+    } else {
+      a.ya += toNumber(r['محقق السنة']||0);   a.yp += toNumber(r['مخطط السنة']||0);
+      a.sa += toNumber(r['محقق الاستراتيجية']||0); a.sp += toNumber(r['مخطط الاستراتيجية']||0);
+    }
+    return a;
+  }, {qa:0,qp:0,ya:0,yp:0,sa:0,sp:0});
+
+  /* KPI summary cards (top of data page) */
+  const kpis = s.period==='monthly'||s.period==='quarterly'
+    ? [{ label:'المحقق', val:fmtAdmin(totals.qa) }, { label:'المخطط', val:fmtAdmin(totals.qp) }, { label:'نسبة الإنجاز', val:pct(totals.qa,totals.qp).toFixed(1)+'%' }]
+    : [{ label:'محقق السنة', val:fmtAdmin(totals.ya) }, { label:'مخطط السنة', val:fmtAdmin(totals.yp) }, { label:'إنجاز السنة', val:pct(totals.ya,totals.yp).toFixed(1)+'%' }, { label:'إنجاز الاستراتيجية', val:pct(totals.sa,totals.sp).toFixed(1)+'%' }];
+
+  const cardW = (W-28-(kpis.length-1)*4)/kpis.length;
+  kpis.forEach((kpi, i) => {
+    const kx = 14 + i*(cardW+4);
+    const ky = 26;
+    doc.setFillColor(255,255,255);
+    doc.roundedRect(kx, ky, cardW, 18, 3, 3, 'F');
+    doc.setDrawColor(226,222,219);
+    doc.setLineWidth(0.2);
+    doc.roundedRect(kx, ky, cardW, 18, 3, 3, 'S');
+    /* Green top accent */
+    doc.setFillColor(35,102,61);
+    doc.roundedRect(kx, ky, cardW, 3, 3, 3, 'F');
+    doc.rect(kx, ky+1.5, cardW, 1.5, 'F');
+    /* Label */
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(7);
+    doc.setTextColor(107,117,109);
+    doc.text(kpi.label, kx+cardW/2, ky+8, { align:'center' });
+    /* Value */
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(10);
+    doc.setTextColor(35,102,61);
+    doc.text(kpi.val, kx+cardW/2, ky+14.5, { align:'center' });
+  });
+
+  /* Data table */
+  const colStyles = {};
+  headers.forEach((h, i) => {
+    colStyles[i] = { halign: h.includes('نسبة')||typeof data[0]?.[h]==='number'?'center':'right':'right' };
+  });
+
+  /* Percentage-aware cell styling */
+  doc.autoTable({
+    head: [headers],
+    body: data.map(r => headers.map(h => r[h])),
+    startY: 48,
+    margin: { left:14, right:14 },
+    styles: {
+      fontSize: 8,
+      cellPadding: 3,
+      valign: 'middle',
+      overflow: 'linebreak',
+      lineColor: [226, 222, 219],
+      lineWidth: 0.15,
+    },
+    headStyles: {
+      fillColor: [23, 71, 43],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8.5,
+      halign: 'center',
+      cellPadding: 4,
+    },
+    alternateRowStyles: {
+      fillColor: [247, 245, 243],
+    },
+    bodyStyles: {
+      fillColor: [255, 255, 255],
+      textColor: [31, 42, 34],
+    },
+    columnStyles: colStyles,
+    didParseCell(hookData){
+      const h = headers[hookData.column.index];
+      if(!h) return;
+      if(h.includes('نسبة') && hookData.section==='body'){
+        const v = parseFloat(String(hookData.cell.raw||''));
+        if(!isNaN(v)){
+          hookData.cell.styles.textColor = v>=90?[21,87,36]:v>=60?[133,100,4]:[114,28,36];
+          hookData.cell.styles.fillColor = v>=90?[212,237,218]:v>=60?[255,243,205]:[248,215,218];
+          hookData.cell.styles.fontStyle = 'bold';
+          hookData.cell.styles.halign    = 'center';
+        }
+      }
+    },
+    didDrawPage(hookData){
+      /* Re-draw background on every new page */
+      const pageNum = doc.internal.getCurrentPageInfo().pageNumber;
+      if(pageNum > 2){
+        /* insert background behind content isn't possible retroactively; add header/footer only */
+      }
+      /* Footer */
+      const pageCount = doc.internal.getNumberOfPages();
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(7);
+      doc.setTextColor(107,117,109);
+      doc.text(
+        'Sawiris Foundation for Social Development  |  ' + scopeLabel + '  |  ' + periodLabel + '  |  ' + today,
+        W/2, H-6, { align:'center' }
+      );
+      doc.text('Page ' + hookData.pageNumber, W-14, H-6, { align:'right' });
+    },
+  });
+
+  doc.save(reportFileName(s.type, s.value, s.period, 'pdf'));
 }
 
 function exportRowsPDF(rows, filename, scope={type:'all',value:'all'}){
-  if(!window.jspdf?.jsPDF){alert('مكتبة PDF لم يتم تحميلها بعد');return;}
-  const doc=new window.jspdf.jsPDF({orientation:'landscape'});
+  if(!window.jspdf?.jsPDF){ alert('مكتبة PDF لم يتم تحميلها بعد'); return; }
+  const doc = new window.jspdf.jsPDF({ orientation:'landscape' });
   doc.text(`Sawiris Performance Report - ${scope.type}: ${scope.value}`, 14, 14);
-  const data=summarizeRows(rows);
-  doc.autoTable({head:[Object.keys(data[0]||{'No Data':''})],body:data.map(Object.values),startY:22,styles:{fontSize:8}});
+  const data = summarizeRows(rows);
+  doc.autoTable({ head:[Object.keys(data[0]||{'No Data':''})], body:data.map(Object.values), startY:22, styles:{ fontSize:8 } });
   doc.save(filename);
 }
 
