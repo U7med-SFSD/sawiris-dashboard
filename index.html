@@ -1253,6 +1253,30 @@ body.authenticated #loginScreen{
   .dashboard-status,.update-pill{display:none!important}
 }
 
+
+
+/* ===== Admin Control Panel + Dynamic Data Tools ===== */
+.admin-panel-btn,.update-pill,.export-tool-btn{
+  background:#F0EDEC;border:1px solid #e2dedb;color:#23663D;padding:10px 14px;border-radius:999px;font-weight:900;cursor:pointer;white-space:nowrap;transition:.2s ease
+}
+.admin-panel-btn:hover,.update-pill:hover,.export-tool-btn:hover{background:#23663D;color:#fff;transform:translateY(-1px)}
+.admin-overlay{position:fixed;inset:0;background:rgba(31,42,34,.55);backdrop-filter:blur(5px);z-index:9998;display:none;align-items:center;justify-content:center;padding:20px}
+.admin-overlay.show{display:flex}
+.admin-panel{width:min(1180px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:28px;border:1px solid rgba(35,102,61,.12);box-shadow:0 24px 70px rgba(0,0,0,.22);padding:24px;color:#1f2a22}
+.admin-panel-header{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:18px;border-bottom:1px solid #e2dedb;padding-bottom:14px}
+.admin-panel-header h2{margin:0;color:#23663D;font-size:24px}.admin-close{border:0;background:#F0EDEC;color:#23663D;border-radius:12px;padding:9px 13px;font-weight:900;cursor:pointer}
+.admin-login-box,.admin-section{background:#fafafa;border:1px solid #e2dedb;border-radius:22px;padding:18px;margin:14px 0}.admin-section h3{margin:0 0 12px;color:#23663D}
+.admin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.admin-grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.admin-field{display:flex;flex-direction:column;gap:7px;font-weight:800;color:#6b756d}.admin-field input,.admin-field select,.admin-field textarea{border:1px solid #e2dedb;border-radius:14px;padding:11px 12px;font:inherit;background:#fff;color:#1f2a22}.admin-field textarea{min-height:88px;resize:vertical}
+.admin-action-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.admin-action{border:0;background:#23663D;color:#fff;padding:11px 15px;border-radius:14px;font-weight:900;cursor:pointer}.admin-action.secondary{background:#A3CA78;color:#10351f}.admin-action.warning{background:#D64545;color:#fff}
+.admin-note{background:rgba(35,102,61,.06);border:1px dashed rgba(35,102,61,.3);padding:12px;border-radius:16px;color:#6b756d;font-weight:800;line-height:1.7}.admin-error{display:none;background:rgba(214,69,69,.08);color:#b83232;font-weight:900;padding:12px;border-radius:14px;margin-top:12px}
+.admin-table-wrap{overflow:auto;border-radius:18px;border:1px solid #e2dedb;background:#fff;max-height:330px}.admin-table{width:100%;border-collapse:collapse;border-spacing:0;min-width:820px}.admin-table th,.admin-table td{padding:10px;border-bottom:1px solid #eee;background:#fff;text-align:right;font-size:13px}.admin-table th{position:sticky;top:0;background:#F0EDEC;color:#23663D;z-index:1}
+.report-export-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:#fff;border:1px solid rgba(35,102,61,.09);border-radius:22px;padding:14px;box-shadow:0 8px 20px rgba(0,0,0,.045)}
+.report-export-toolbar select{border:1px solid #e2dedb;border-radius:999px;padding:10px 12px;font-weight:800;color:#23663D;background:#F0EDEC}.report-export-toolbar .toolbar-title{font-weight:900;color:#23663D;margin-left:auto}
+.dashboard-status{position:fixed;left:24px;bottom:22px;background:#fff;border:1px solid rgba(35,102,61,.14);border-radius:999px;padding:9px 14px;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:900;color:#23663D;box-shadow:0 10px 24px rgba(0,0,0,.08);z-index:50}.status-dot{width:9px;height:9px;border-radius:50%;background:#28A745;box-shadow:0 0 0 5px rgba(40,167,69,.12)}
+@media(max-width:900px){.admin-grid,.admin-grid-3{grid-template-columns:1fr}.report-export-toolbar .toolbar-title{width:100%;margin-left:0}.dashboard-status{left:12px;right:12px;justify-content:center}}
+@media print{.admin-panel-btn,.update-pill,.report-export-toolbar,.dashboard-status,.admin-overlay{display:none!important}}
+
 </style>
 
 <script>
@@ -1282,6 +1306,10 @@ window.__msalLoadPromise = (function(){
   return loadSource(0);
 })();
 </script>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body class="auth-loading">
 
@@ -1379,10 +1407,23 @@ window.__msalLoadPromise = (function(){
         font-weight:bold;
         cursor:pointer;
     ">📄 إنشاء تقرير PDF</button>
+    <button class="admin-panel-btn" type="button" onclick="openAdminPanel()">⚙️ لوحة التحكم</button>
+    <button class="update-pill" type="button" title="آخر تحديث للبيانات">🕒 <span id="lastUpdateLabel">آخر تحديث: غير محدد</span></button>
     <div><h1 id="title">لوحة المؤشرات التنفيذية</h1><div class="subtitle">لوحة متابعة الأداء المؤسسي</div></div>
     </div>
   <section id="home" class="page active">
     <div class="home-layout">
+      <div class="report-export-toolbar" aria-label="أدوات تصدير التقارير">
+        <span class="toolbar-title">📤 تصدير التقارير</span>
+        <select id="reportScopeType" onchange="refreshReportScopeOptions()">
+          <option value="all">تقرير شامل</option>
+          <option value="sector">تقرير قطاع</option>
+          <option value="program">تقرير برنامج</option>
+        </select>
+        <select id="reportScopeValue"><option value="all">كل البرامج</option></select>
+        <button class="export-tool-btn" type="button" onclick="exportSelectedReportExcel()">Excel</button>
+        <button class="export-tool-btn" type="button" onclick="exportSelectedReportPDF()">PDF</button>
+      </div>
 
       <div class="home-kpi-row">
         <div class="card kpi-combo primary-kpi">
@@ -3345,8 +3386,308 @@ document.addEventListener('DOMContentLoaded', initMicrosoftLogin);
 
 <div class="dashboard-status" aria-live="polite">
   <span class="status-dot"></span>
-  <span id="liveUserStatus">Ahmed Saif Online Now</span>
+  <span id="liveUserStatus">Ahmed Saif Online now</span>
 </div>
+
+
+
+<div id="adminOverlay" class="admin-overlay" aria-hidden="true">
+  <div class="admin-panel" role="dialog" aria-modal="true" aria-label="لوحة التحكم">
+    <div class="admin-panel-header">
+      <h2>⚙️ لوحة التحكم وربط البيانات</h2>
+      <button class="admin-close" type="button" onclick="closeAdminPanel()">إغلاق ✕</button>
+    </div>
+
+    <div id="adminLoginBox" class="admin-login-box">
+      <div class="admin-note">هذه حماية واجهة فقط مناسبة للعرض على GitHub Pages. للحماية الفعلية وإرسال الإيميلات تلقائيًا يجب استخدام Backend أو Power Automate.</div>
+      <div class="admin-grid" style="margin-top:12px">
+        <label class="admin-field">كلمة مرور لوحة التحكم
+          <input id="adminPasswordInput" type="password" placeholder="ادخل كلمة المرور">
+        </label>
+        <div class="admin-field" style="justify-content:flex-end">
+          <button class="admin-action" type="button" onclick="adminLogin()">دخول لوحة التحكم</button>
+        </div>
+      </div>
+      <div id="adminLoginError" class="admin-error">كلمة المرور غير صحيحة</div>
+    </div>
+
+    <div id="adminContent" style="display:none">
+      <div class="admin-section">
+        <h3>1) ربط ملف Excel وتحديث الداشبورد</h3>
+        <div class="admin-grid">
+          <label class="admin-field">رفع ملف Excel
+            <input id="excelFileInput" type="file" accept=".xlsx,.xls,.csv" onchange="handleExcelUpload(event)">
+          </label>
+          <label class="admin-field">آخر تحديث للبيانات
+            <input id="manualUpdateDate" type="datetime-local">
+          </label>
+        </div>
+        <div class="admin-action-row">
+          <button class="admin-action" type="button" onclick="applyDynamicDataToDashboard()">تطبيق البيانات على الصفحة</button>
+          <button class="admin-action secondary" type="button" onclick="saveDashboardDataLocal()">حفظ البيانات داخل المتصفح</button>
+          <button class="admin-action warning" type="button" onclick="clearDashboardDataLocal()">مسح البيانات المحفوظة</button>
+        </div>
+        <p class="admin-note">يفضل أن يحتوي ملف Excel على أعمدة مثل: البرنامج، القطاع، الهدف، محقق السنة، مخطط السنة، محقق الاستراتيجية، مخطط الاستراتيجية، محقق الربع، مخطط الربع.</p>
+      </div>
+
+      <div class="admin-section">
+        <h3>2) معاينة البيانات المقروءة</h3>
+        <div class="admin-table-wrap"><table class="admin-table" id="excelPreviewTable"><thead><tr><th>لم يتم رفع بيانات بعد</th></tr></thead><tbody></tbody></table></div>
+      </div>
+
+      <div class="admin-section">
+        <h3>3) إعداد المستلمين وإرسال التقارير</h3>
+        <div class="admin-grid-3">
+          <label class="admin-field">نائبة المديرة التنفيذية - تقرير شامل
+            <input id="deputyEmail" type="email" placeholder="name@example.org">
+          </label>
+          <label class="admin-field">CC أعضاء الفريق
+            <input id="teamCcEmails" type="text" placeholder="email1@example.org,email2@example.org">
+          </label>
+          <label class="admin-field">موضوع الإيميل
+            <input id="emailSubjectPrefix" type="text" value="تقرير متابعة الأداء">
+          </label>
+        </div>
+        <div class="admin-grid" style="margin-top:12px">
+          <label class="admin-field">مدراء القطاعات / Directors
+            <textarea id="sectorRecipients" placeholder="التمكين الاقتصادي|director@example.org&#10;التمكين الاجتماعي|director@example.org&#10;التعليم|director@example.org"></textarea>
+          </label>
+          <label class="admin-field">مدراء البرامج
+            <textarea id="programRecipients" placeholder="تنمية المشروعات|manager@example.org&#10;برنامج آخر|manager@example.org"></textarea>
+          </label>
+        </div>
+        <div class="admin-action-row">
+          <button class="admin-action" type="button" onclick="prepareAllEmails()">تجهيز إيميلات التقارير</button>
+          <button class="admin-action secondary" type="button" onclick="exportRecipientTemplate()">تحميل قالب المستلمين Excel</button>
+        </div>
+        <div id="emailLinksArea" class="admin-action-row"></div>
+        <p class="admin-note">المتصفح لا يستطيع إرسال إيميلات بمرفقات تلقائيًا من GitHub Pages. الزر يفتح مسودة إيميل جاهزة، ويمكن إرفاق ملف التقرير المُصدّر يدويًا. للإرسال بضغطة واحدة بمرفقات نحتاج Power Automate أو Microsoft Graph.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<script>
+/* ===== Admin Control Panel Logic ===== */
+const ADMIN_PASSWORD = 'Mteam555';
+let dynamicDashboardRows = [];
+
+const normalizeKey = key => String(key || '').trim().replace(/\s+/g,' ').toLowerCase();
+function pick(row, keys){
+  const entries = Object.entries(row || {});
+  for(const wanted of keys){
+    const w = normalizeKey(wanted);
+    const found = entries.find(([k]) => normalizeKey(k) === w || normalizeKey(k).includes(w) || w.includes(normalizeKey(k)));
+    if(found) return found[1];
+  }
+  return '';
+}
+function toNumber(v){
+  if(v === null || v === undefined || v === '') return 0;
+  const n = Number(String(v).replace(/,/g,'').replace(/٪/g,'').trim());
+  return isNaN(n) ? 0 : n;
+}
+function rowProgram(row){return pick(row,['البرنامج','برنامج','program','programme']);}
+function rowSector(row){return pick(row,['القطاع','sector']);}
+function rowGoal(row){return pick(row,['الهدف','goal','objective']);}
+function rowYearActual(row){return toNumber(pick(row,['محقق السنة','محقق العام','year actual','annual actual','actual year']));}
+function rowYearPlan(row){return toNumber(pick(row,['مخطط السنة','مخطط العام','year plan','annual plan','planned year']));}
+function rowStrActual(row){return toNumber(pick(row,['المحقق على مستوى الاستراتيجية','محقق الاستراتيجية','strategy actual','strategic actual']));}
+function rowStrPlan(row){return toNumber(pick(row,['المخطط على مستوى الاستراتيجية','مخطط الاستراتيجية','strategy plan','strategic plan']));}
+function rowQuarterActual(row){return toNumber(pick(row,['محقق الربع','محقق الربع الأول','quarter actual','q actual']));}
+function rowQuarterPlan(row){return toNumber(pick(row,['مخطط الربع','مخطط الربع الأول','quarter plan','q plan']));}
+function fmtAdmin(n){return Number(n||0).toLocaleString('en-US');}
+function pct(a,b){return b ? (a/b*100) : 0;}
+
+function openAdminPanel(){document.getElementById('adminOverlay')?.classList.add('show');document.getElementById('adminOverlay')?.setAttribute('aria-hidden','false');}
+function closeAdminPanel(){document.getElementById('adminOverlay')?.classList.remove('show');document.getElementById('adminOverlay')?.setAttribute('aria-hidden','true');}
+function adminLogin(){
+  const pass=document.getElementById('adminPasswordInput')?.value || '';
+  const err=document.getElementById('adminLoginError');
+  if(pass===ADMIN_PASSWORD){
+    document.getElementById('adminLoginBox').style.display='none';
+    document.getElementById('adminContent').style.display='block';
+    if(err) err.style.display='none';
+  }else if(err){err.style.display='block';}
+}
+
+document.addEventListener('keydown', e=>{if(e.key==='Escape') closeAdminPanel();});
+
+function handleExcelUpload(event){
+  const file = event.target.files?.[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const data = new Uint8Array(e.target.result);
+    const workbook = XLSX.read(data, {type:'array'});
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    dynamicDashboardRows = XLSX.utils.sheet_to_json(sheet, {defval:''});
+    renderExcelPreview(dynamicDashboardRows);
+    setLastUpdate(new Date());
+    refreshReportScopeOptions();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderExcelPreview(rows){
+  const table=document.getElementById('excelPreviewTable');
+  if(!table) return;
+  if(!rows.length){table.innerHTML='<thead><tr><th>لا توجد بيانات</th></tr></thead><tbody></tbody>';return;}
+  const keys=Object.keys(rows[0]).slice(0,12);
+  table.innerHTML=`<thead><tr>${keys.map(k=>`<th>${k}</th>`).join('')}</tr></thead><tbody>${rows.slice(0,60).map(r=>`<tr>${keys.map(k=>`<td>${r[k] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody>`;
+}
+
+function setLastUpdate(date){
+  const d = date instanceof Date ? date : new Date(date);
+  const text = d.toLocaleString('ar-EG',{dateStyle:'medium',timeStyle:'short'});
+  localStorage.setItem('dashboardLastUpdate', text);
+  const label=document.getElementById('lastUpdateLabel');
+  if(label) label.textContent='آخر تحديث: '+text;
+  const manual=document.getElementById('manualUpdateDate');
+  if(manual) manual.value = new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+}
+
+function applyDynamicDataToDashboard(){
+  if(!dynamicDashboardRows.length){alert('ارفع ملف Excel أولًا');return;}
+  const totals = dynamicDashboardRows.reduce((a,r)=>{
+    a.yearActual += rowYearActual(r); a.yearPlan += rowYearPlan(r);
+    a.strActual += rowStrActual(r); a.strPlan += rowStrPlan(r);
+    return a;
+  },{yearActual:0,yearPlan:0,strActual:0,strPlan:0});
+  const cards = document.querySelectorAll('#home .home-kpi-row .primary-kpi');
+  if(cards[0]){
+    cards[0].querySelector('.kpi-value').innerHTML = `${fmtAdmin(totals.yearActual)} <span>/ ${fmtAdmin(totals.yearPlan)}</span>`;
+    cards[0].querySelector('.progress-label strong').textContent = `${pct(totals.yearActual,totals.yearPlan).toFixed(2)}%`;
+    const g=cards[0].querySelector('.gauge div'); if(g) g.style.width=`${Math.min(pct(totals.yearActual,totals.yearPlan),100)}%`;
+  }
+  if(cards[1]){
+    cards[1].querySelector('.kpi-value').innerHTML = `${fmtAdmin(totals.strActual)} <span>/ ${fmtAdmin(totals.strPlan)}</span>`;
+    cards[1].querySelector('.progress-label strong').textContent = `${pct(totals.strActual,totals.strPlan).toFixed(2)}%`;
+    const g=cards[1].querySelector('.gauge div'); if(g) g.style.width=`${Math.min(pct(totals.strActual,totals.strPlan),100)}%`;
+  }
+  updateGoalBreakdowns(cards[0], 'year');
+  updateGoalBreakdowns(cards[1], 'strategy');
+  const manual = document.getElementById('manualUpdateDate')?.value;
+  setLastUpdate(manual ? new Date(manual) : new Date());
+  refreshReportScopeOptions();
+  alert('تم تحديث الصفحة بالبيانات الجديدة');
+}
+
+function updateGoalBreakdowns(card, mode){
+  if(!card) return;
+  const goals = ['الهدف الأول','الهدف الثاني'];
+  const container = card.querySelector('.goal-breakdown');
+  if(!container) return;
+  container.innerHTML = goals.map(goal=>{
+    const rows = dynamicDashboardRows.filter(r => String(rowGoal(r)||'').includes(goal) || String(rowGoal(r)||'').includes(goal.replace('الهدف ','')));
+    const actual = rows.reduce((s,r)=>s+(mode==='year'?rowYearActual(r):rowStrActual(r)),0);
+    const plan = rows.reduce((s,r)=>s+(mode==='year'?rowYearPlan(r):rowStrPlan(r)),0);
+    const percentage = pct(actual,plan);
+    return `<div class="goal-mini"><strong>${goal}</strong><div class="track"><div class="fill" style="width:${Math.min(percentage,100)}%;background:var(--main)"></div></div><span>${fmtAdmin(actual)} / ${fmtAdmin(plan)}</span></div>`;
+  }).join('');
+}
+
+function saveDashboardDataLocal(){
+  localStorage.setItem('dynamicDashboardRows', JSON.stringify(dynamicDashboardRows));
+  localStorage.setItem('dashboardRecipients', JSON.stringify(getRecipientsConfig()));
+  alert('تم حفظ البيانات والإعدادات داخل المتصفح');
+}
+function clearDashboardDataLocal(){
+  localStorage.removeItem('dynamicDashboardRows');localStorage.removeItem('dashboardRecipients');localStorage.removeItem('dashboardLastUpdate');
+  dynamicDashboardRows=[];renderExcelPreview([]);refreshReportScopeOptions();alert('تم مسح البيانات المحفوظة');
+}
+function loadSavedDashboardData(){
+  try{dynamicDashboardRows=JSON.parse(localStorage.getItem('dynamicDashboardRows')||'[]');}catch{dynamicDashboardRows=[];}
+  if(dynamicDashboardRows.length){renderExcelPreview(dynamicDashboardRows);refreshReportScopeOptions();}
+  const last=localStorage.getItem('dashboardLastUpdate');
+  if(last){const label=document.getElementById('lastUpdateLabel'); if(label) label.textContent='آخر تحديث: '+last;}
+  try{
+    const r=JSON.parse(localStorage.getItem('dashboardRecipients')||'{}');
+    Object.entries(r).forEach(([id,val])=>{const el=document.getElementById(id); if(el) el.value=val;});
+  }catch{}
+}
+function getRecipientsConfig(){
+  return ['deputyEmail','teamCcEmails','emailSubjectPrefix','sectorRecipients','programRecipients'].reduce((a,id)=>{a[id]=document.getElementById(id)?.value||'';return a;},{});
+}
+
+function getReportRows(type='all', value='all'){
+  let rows = dynamicDashboardRows.length ? dynamicDashboardRows : (window.programs||[]).map(p=>({program:p[0],sector:p[1],yearActual:p[7],yearPlan:p[8],strategyActual:p[2],strategyPlan:p[3],quarterActual:p[5],quarterPlan:p[6]}));
+  if(type==='sector') rows = rows.filter(r => String(rowSector(r) || r.sector || '').trim() === value);
+  if(type==='program') rows = rows.filter(r => String(rowProgram(r) || r.program || '').trim() === value);
+  return rows;
+}
+function summarizeRows(rows){
+  return rows.map(r=>({
+    'البرنامج': rowProgram(r) || r.program || '',
+    'القطاع': rowSector(r) || r.sector || '',
+    'الهدف': rowGoal(r) || '',
+    'محقق الربع': rowQuarterActual(r) || r.quarterActual || 0,
+    'مخطط الربع': rowQuarterPlan(r) || r.quarterPlan || 0,
+    'محقق السنة': rowYearActual(r) || r.yearActual || 0,
+    'مخطط السنة': rowYearPlan(r) || r.yearPlan || 0,
+    'نسبة السنة': `${pct(rowYearActual(r)||r.yearActual||0,rowYearPlan(r)||r.yearPlan||0).toFixed(2)}%`,
+    'محقق الاستراتيجية': rowStrActual(r) || r.strategyActual || 0,
+    'مخطط الاستراتيجية': rowStrPlan(r) || r.strategyPlan || 0,
+    'نسبة الاستراتيجية': `${pct(rowStrActual(r)||r.strategyActual||0,rowStrPlan(r)||r.strategyPlan||0).toFixed(2)}%`
+  }));
+}
+function refreshReportScopeOptions(){
+  const type=document.getElementById('reportScopeType')?.value || 'all';
+  const select=document.getElementById('reportScopeValue'); if(!select) return;
+  if(type==='all'){select.innerHTML='<option value="all">كل البرامج</option>';return;}
+  const rows=getReportRows('all','all');
+  const values=[...new Set(rows.map(r=>type==='sector'?(rowSector(r)||r.sector):(rowProgram(r)||r.program)).filter(Boolean))];
+  select.innerHTML=values.map(v=>`<option value="${String(v).replace(/"/g,'&quot;')}">${v}</option>`).join('') || '<option value="all">لا توجد بيانات</option>';
+}
+function selectedScope(){return {type:document.getElementById('reportScopeType')?.value||'all', value:document.getElementById('reportScopeValue')?.value||'all'};}
+function reportFileName(type,value,ext){return `Sawiris_Report_${type}_${String(value||'all').replace(/[\\/:*?"<>|\s]+/g,'_')}.${ext}`;}
+function exportSelectedReportExcel(){const s=selectedScope(); exportRowsExcel(getReportRows(s.type,s.value), reportFileName(s.type,s.value,'xlsx'));}
+function exportRowsExcel(rows, filename){
+  const data=summarizeRows(rows); const wb=XLSX.utils.book_new(); const ws=XLSX.utils.json_to_sheet(data); XLSX.utils.book_append_sheet(wb,ws,'Report'); XLSX.writeFile(wb,filename);
+}
+function exportSelectedReportPDF(){const s=selectedScope(); exportRowsPDF(getReportRows(s.type,s.value), reportFileName(s.type,s.value,'pdf'), s);}
+function exportRowsPDF(rows, filename, scope={type:'all',value:'all'}){
+  if(!window.jspdf?.jsPDF){alert('مكتبة PDF لم يتم تحميلها بعد');return;}
+  const doc=new window.jspdf.jsPDF({orientation:'landscape'});
+  doc.text(`Sawiris Performance Report - ${scope.type}: ${scope.value}`, 14, 14);
+  const data=summarizeRows(rows);
+  doc.autoTable({head:[Object.keys(data[0]||{'No Data':''})],body:data.map(Object.values),startY:22,styles:{fontSize:8}});
+  doc.save(filename);
+}
+
+function parseRecipientLines(text){
+  return String(text||'').split(/\n+/).map(line=>line.trim()).filter(Boolean).map(line=>{const [name,email]=line.split('|').map(x=>x?.trim());return {name,email};}).filter(x=>x.name&&x.email);
+}
+function prepareAllEmails(){
+  const cfg=getRecipientsConfig(); localStorage.setItem('dashboardRecipients',JSON.stringify(cfg));
+  const area=document.getElementById('emailLinksArea'); if(!area) return; area.innerHTML='';
+  const cc=cfg.teamCcEmails||''; const prefix=cfg.emailSubjectPrefix||'تقرير متابعة الأداء';
+  const links=[];
+  if(cfg.deputyEmail) links.push({label:'إيميل التقرير الشامل لنائبة المديرة التنفيذية',email:cfg.deputyEmail,subject:`${prefix} - تقرير شامل`,body:buildEmailBody('التقرير الشامل','all','all')});
+  parseRecipientLines(cfg.sectorRecipients).forEach(r=>links.push({label:`إيميل قطاع ${r.name}`,email:r.email,subject:`${prefix} - ${r.name}`,body:buildEmailBody(`قطاع ${r.name}`,'sector',r.name)}));
+  parseRecipientLines(cfg.programRecipients).forEach(r=>links.push({label:`إيميل برنامج ${r.name}`,email:r.email,subject:`${prefix} - ${r.name}`,body:buildEmailBody(`برنامج ${r.name}`,'program',r.name)}));
+  links.forEach(l=>{
+    const a=document.createElement('a'); a.className='admin-action secondary'; a.textContent=l.label; a.href=`mailto:${encodeURIComponent(l.email)}?cc=${encodeURIComponent(cc)}&subject=${encodeURIComponent(l.subject)}&body=${encodeURIComponent(l.body)}`; area.appendChild(a);
+  });
+  if(!links.length) area.innerHTML='<div class="admin-note">أضف المستلمين أولًا.</div>';
+}
+function buildEmailBody(title,type,value){
+  const rows=getReportRows(type,value); const data=summarizeRows(rows); const total=data.reduce((a,r)=>{a.ya+=toNumber(r['محقق السنة']);a.yp+=toNumber(r['مخطط السنة']);a.sa+=toNumber(r['محقق الاستراتيجية']);a.sp+=toNumber(r['مخطط الاستراتيجية']);return a;},{ya:0,yp:0,sa:0,sp:0});
+  return `السادة الزملاء،\n\nمرفق/أدناه ${title}.\n\nملخص سريع:\n- محقق السنة: ${fmtAdmin(total.ya)} من ${fmtAdmin(total.yp)} (${pct(total.ya,total.yp).toFixed(2)}%)\n- محقق الاستراتيجية: ${fmtAdmin(total.sa)} من ${fmtAdmin(total.sp)} (${pct(total.sa,total.sp).toFixed(2)}%)\n- عدد البرامج/السجلات: ${rows.length}\n\nيرجى مراجعة التقرير والرجوع في حالة وجود أي ملاحظات.\n\nتحياتي،`;
+}
+function exportRecipientTemplate(){
+  const rows=[
+    {'النوع':'Deputy Executive Director','الاسم':'نائبة المديرة التنفيذية','الإيميل':'deputy@example.org','النطاق':'all'},
+    {'النوع':'Sector Director','الاسم':'التمكين الاقتصادي','الإيميل':'economic.director@example.org','النطاق':'sector'},
+    {'النوع':'Program Manager','الاسم':'تنمية المشروعات','الإيميل':'program.manager@example.org','النطاق':'program'}
+  ];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'Recipients'); XLSX.writeFile(wb,'recipients_template.xlsx');
+}
+
+document.addEventListener('DOMContentLoaded',()=>{loadSavedDashboardData(); refreshReportScopeOptions();});
+</script>
 
 </body>
 </html>
