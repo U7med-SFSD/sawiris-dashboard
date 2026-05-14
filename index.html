@@ -3119,6 +3119,64 @@ body.sector-education .topbar h1{color:var(--blue)!important;}
   .dashboard-status,.update-pill{display:none!important}
 }
 
+/* ===== Export Report UI ===== */
+.export-report-box{
+  background:#f7f5f3;
+  border:1px solid #e2dedb;
+  border-radius:18px;
+  padding:20px;
+}
+.export-report-row{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:14px;
+  align-items:end;
+}
+.export-field-group{
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+}
+.admin-field-label{
+  font-size:13px;
+  font-weight:800;
+  color:var(--main);
+}
+.export-select{
+  padding:11px 14px;
+  border-radius:12px;
+  border:1px solid #d5d0cc;
+  background:#fff;
+  font-family:inherit;
+  font-size:14px;
+  font-weight:700;
+  color:var(--text);
+  cursor:pointer;
+  outline:none;
+  transition:.2s ease;
+  -webkit-appearance:none;
+  appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7' viewBox='0 0 12 7'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2323663D' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:left 12px center;
+  padding-left:34px;
+}
+.export-select:focus{
+  border-color:var(--main);
+  box-shadow:0 0 0 3px rgba(35,102,61,.12);
+}
+.export-report-summary{
+  margin-top:14px;
+  padding:11px 14px;
+  background:rgba(35,102,61,.07);
+  border:1px dashed rgba(35,102,61,.25);
+  border-radius:12px;
+  font-size:13px;
+  font-weight:700;
+  color:var(--main);
+}
+@media(max-width:900px){.export-report-row{grid-template-columns:1fr}}
+
 </style>
 
 <div class="brand-watermark">Sawiris Foundation for Social Development</div>
@@ -3436,7 +3494,44 @@ document.addEventListener('DOMContentLoaded', initMicrosoftLogin);
       </div>
 
       <div class="admin-section">
-        <h3>3) إعداد المستلمين وإرسال التقارير</h3>
+        <h3>3) تصدير التقارير</h3>
+        <div class="export-report-box">
+          <div class="export-report-row">
+            <div class="export-field-group">
+              <label class="admin-field-label">نوع التقرير</label>
+              <select id="reportScopeType" class="export-select" onchange="refreshReportScopeOptions()">
+                <option value="all">📊 تقرير المؤسسة بالكامل</option>
+                <option value="sector">🏢 تقرير قطاع</option>
+                <option value="program">📁 تقرير برنامج</option>
+              </select>
+            </div>
+            <div class="export-field-group" id="reportScopeValueGroup">
+              <label class="admin-field-label">اختر القطاع / البرنامج</label>
+              <select id="reportScopeValue" class="export-select">
+                <option value="all">كل البرامج</option>
+              </select>
+            </div>
+            <div class="export-field-group">
+              <label class="admin-field-label">فترة التقرير</label>
+              <select id="reportPeriodType" class="export-select">
+                <option value="monthly">📅 شهري</option>
+                <option value="quarterly">📆 ربع سنوي</option>
+                <option value="annual">🗓️ سنوي</option>
+              </select>
+            </div>
+          </div>
+          <div class="export-report-summary" id="exportReportSummary">
+            اختر نوع التقرير والفترة ثم قم بالتصدير
+          </div>
+          <div class="admin-action-row" style="margin-top:14px">
+            <button class="admin-action" type="button" onclick="exportSelectedReportExcel()">⬇️ تصدير Excel</button>
+            <button class="admin-action secondary" type="button" onclick="exportSelectedReportPDF()">📄 تصدير PDF</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="admin-section">
+        <h3>4) إعداد المستلمين وإرسال التقارير</h3>
         <div class="admin-grid-3">
           <label class="admin-field">نائبة المديرة التنفيذية - تقرير شامل
             <input id="deputyEmail" type="email" placeholder="name@example.org">
@@ -3636,18 +3731,99 @@ function summarizeRows(rows){
 function refreshReportScopeOptions(){
   const type=document.getElementById('reportScopeType')?.value || 'all';
   const select=document.getElementById('reportScopeValue'); if(!select) return;
-  if(type==='all'){select.innerHTML='<option value="all">كل البرامج</option>';return;}
-  const rows=getReportRows('all','all');
-  const values=[...new Set(rows.map(r=>type==='sector'?(rowSector(r)||r.sector):(rowProgram(r)||r.program)).filter(Boolean))];
-  select.innerHTML=values.map(v=>`<option value="${String(v).replace(/"/g,'&quot;')}">${v}</option>`).join('') || '<option value="all">لا توجد بيانات</option>';
+  const valueGroup=document.getElementById('reportScopeValueGroup');
+  if(type==='all'){
+    select.innerHTML='<option value="all">كل المؤسسة</option>';
+    if(valueGroup) valueGroup.style.opacity='0.45';
+  } else {
+    if(valueGroup) valueGroup.style.opacity='1';
+    const rows=getReportRows('all','all');
+    const values=[...new Set(rows.map(r=>type==='sector'?(rowSector(r)||r.sector):(rowProgram(r)||r.program)).filter(Boolean))];
+    select.innerHTML=values.map(v=>`<option value="${String(v).replace(/"/g,'&quot;')}">${v}</option>`).join('') || '<option value="all">لا توجد بيانات</option>';
+  }
+  updateExportSummary();
 }
-function selectedScope(){return {type:document.getElementById('reportScopeType')?.value||'all', value:document.getElementById('reportScopeValue')?.value||'all'};}
-function reportFileName(type,value,ext){return `Sawiris_Report_${type}_${String(value||'all').replace(/[\\/:*?"<>|\s]+/g,'_')}.${ext}`;}
-function exportSelectedReportExcel(){const s=selectedScope(); exportRowsExcel(getReportRows(s.type,s.value), reportFileName(s.type,s.value,'xlsx'));}
+
+function updateExportSummary(){
+  const summary=document.getElementById('exportReportSummary'); if(!summary) return;
+  const scopeType=document.getElementById('reportScopeType')?.value||'all';
+  const scopeValue=document.getElementById('reportScopeValue')?.value||'all';
+  const periodType=document.getElementById('reportPeriodType')?.value||'annual';
+  const scopeLabels={'all':'تقرير المؤسسة بالكامل','sector':'تقرير قطاع: '+scopeValue,'program':'تقرير برنامج: '+scopeValue};
+  const periodLabels={'monthly':'شهري','quarterly':'ربع سنوي','annual':'سنوي'};
+  const rows=getReportRows(scopeType,scopeValue);
+  summary.innerHTML=`📋 <strong>${scopeLabels[scopeType]||''}</strong> &nbsp;|&nbsp; ⏱️ الفترة: <strong>${periodLabels[periodType]||''}</strong> &nbsp;|&nbsp; عدد السجلات: <strong>${rows.length}</strong>`;
+}
+
+function selectedScope(){
+  return {
+    type:document.getElementById('reportScopeType')?.value||'all',
+    value:document.getElementById('reportScopeValue')?.value||'all',
+    period:document.getElementById('reportPeriodType')?.value||'annual'
+  };
+}
+
+function periodLabel(period){
+  return {'monthly':'شهري','quarterly':'ربع_سنوي','annual':'سنوي'}[period]||period;
+}
+
+function reportFileName(type,value,period,ext){
+  return `Sawiris_Report_${type}_${String(value||'all').replace(/[\\/:*?"<>|\s]+/g,'_')}_${periodLabel(period)}.${ext}`;
+}
+
+function summarizeRowsByPeriod(rows, period){
+  return rows.map(r=>{
+    const base={
+      'البرنامج': rowProgram(r)||r.program||'',
+      'القطاع': rowSector(r)||r.sector||'',
+      'الهدف': rowGoal(r)||''
+    };
+    if(period==='monthly'||period==='quarterly'){
+      return {...base,
+        'المحقق (الربع)': rowQuarterActual(r)||r.quarterActual||0,
+        'المخطط (الربع)': rowQuarterPlan(r)||r.quarterPlan||0,
+        'نسبة الإنجاز (الربع)': `${pct(rowQuarterActual(r)||r.quarterActual||0, rowQuarterPlan(r)||r.quarterPlan||0).toFixed(2)}%`
+      };
+    }
+    return {...base,
+      'محقق السنة': rowYearActual(r)||r.yearActual||0,
+      'مخطط السنة': rowYearPlan(r)||r.yearPlan||0,
+      'نسبة السنة': `${pct(rowYearActual(r)||r.yearActual||0, rowYearPlan(r)||r.yearPlan||0).toFixed(2)}%`,
+      'محقق الاستراتيجية': rowStrActual(r)||r.strategyActual||0,
+      'مخطط الاستراتيجية': rowStrPlan(r)||r.strategyPlan||0,
+      'نسبة الاستراتيجية': `${pct(rowStrActual(r)||r.strategyActual||0, rowStrPlan(r)||r.strategyPlan||0).toFixed(2)}%`
+    };
+  });
+}
+
+function exportSelectedReportExcel(){
+  const s=selectedScope();
+  const rows=getReportRows(s.type,s.value);
+  if(!rows.length){alert('لا توجد بيانات للتصدير');return;}
+  const data=summarizeRowsByPeriod(rows,s.period);
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.json_to_sheet(data);
+  XLSX.utils.book_append_sheet(wb,ws,'Report');
+  XLSX.writeFile(wb, reportFileName(s.type,s.value,s.period,'xlsx'));
+}
+
 function exportRowsExcel(rows, filename){
   const data=summarizeRows(rows); const wb=XLSX.utils.book_new(); const ws=XLSX.utils.json_to_sheet(data); XLSX.utils.book_append_sheet(wb,ws,'Report'); XLSX.writeFile(wb,filename);
 }
-function exportSelectedReportPDF(){const s=selectedScope(); exportRowsPDF(getReportRows(s.type,s.value), reportFileName(s.type,s.value,'pdf'), s);}
+
+function exportSelectedReportPDF(){
+  const s=selectedScope();
+  const rows=getReportRows(s.type,s.value);
+  if(!rows.length){alert('لا توجد بيانات للتصدير');return;}
+  if(!window.jspdf?.jsPDF){alert('مكتبة PDF لم يتم تحميلها بعد');return;}
+  const periodLabels={'monthly':'شهري','quarterly':'ربع سنوي','annual':'سنوي'};
+  const doc=new window.jspdf.jsPDF({orientation:'landscape'});
+  doc.text(`Sawiris Foundation - ${s.type==='all'?'تقرير شامل':s.type==='sector'?'قطاع: '+s.value:'برنامج: '+s.value} | الفترة: ${periodLabels[s.period]||''}`, 14, 14);
+  const data=summarizeRowsByPeriod(rows,s.period);
+  doc.autoTable({head:[Object.keys(data[0]||{'No Data':''})],body:data.map(Object.values),startY:22,styles:{fontSize:8}});
+  doc.save(reportFileName(s.type,s.value,s.period,'pdf'));
+}
+
 function exportRowsPDF(rows, filename, scope={type:'all',value:'all'}){
   if(!window.jspdf?.jsPDF){alert('مكتبة PDF لم يتم تحميلها بعد');return;}
   const doc=new window.jspdf.jsPDF({orientation:'landscape'});
@@ -3686,7 +3862,13 @@ function exportRecipientTemplate(){
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'Recipients'); XLSX.writeFile(wb,'recipients_template.xlsx');
 }
 
-document.addEventListener('DOMContentLoaded',()=>{loadSavedDashboardData(); refreshReportScopeOptions();});
+document.addEventListener('DOMContentLoaded',()=>{
+  loadSavedDashboardData();
+  refreshReportScopeOptions();
+  document.getElementById('reportPeriodType')?.addEventListener('change', updateExportSummary);
+  document.getElementById('reportScopeValue')?.addEventListener('change', updateExportSummary);
+  document.getElementById('reportScopeType')?.addEventListener('change', ()=>{ refreshReportScopeOptions(); updateExportSummary(); });
+});
 </script>
 
 </body>
